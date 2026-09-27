@@ -1,0 +1,154 @@
+// Prisma Schema for Tumbledays PostgreSQL Database
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum OrderStatus {
+  BOOKED
+  PICKED_UP
+  IN_PROCESS
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum ServiceType {
+  DRY_CLEAN
+  WASH_FOLD
+  WASH_IRON
+  STEAM_IRON
+  SHOE_CLEANING
+  HOME_LINEN
+}
+
+enum PricingUnit {
+  PER_PIECE
+  PER_KG
+  PER_PAIR
+  PER_SET
+}
+
+model User {
+  id             String         @id @default(uuid())
+  phone          String         @unique
+  name           String?
+  email          String?        @unique
+  city           String         @default("Lucknow")
+  referralCode   String?        @unique
+  walletBalance  Decimal        @default(0.0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  addresses      Address[]
+  orders         Order[]
+}
+
+model Address {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag           String    @default("Home") // Home, Office, Other
+  flat          String
+  street        String
+  landmark      String?
+  city          String    @default("Lucknow")
+  pincode       String
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  orders        Order[]
+}
+
+model Service {
+  id            String        @id @default(uuid())
+  slug          String        @unique // dry-clean, wash-fold, etc.
+  name          String
+  description   String
+  type          ServiceType
+  startingPrice Decimal
+  turnaround    String
+  items         CatalogItem[]
+  createdAt     DateTime      @default(now())
+}
+
+model CatalogItem {
+  id          String      @id @default(uuid())
+  serviceId   String
+  service     Service     @relation(fields: [serviceId], references: [id])
+  name        String
+  category    String      // Men, Women, Household, etc.
+  price       Decimal
+  unit        PricingUnit @default(PER_PIECE)
+  icon        String?
+  orderItems  OrderItem[]
+}
+
+model Order {
+  id                String            @id @default(uuid())
+  orderNumber       String            @unique // e.g. TMB-89241
+  userId            String
+  user              User              @relation(fields: [userId], references: [id])
+  addressId         String
+  address           Address           @relation(fields: [addressId], references: [id])
+  status            OrderStatus       @default(BOOKED)
+  pickupDate        String
+  pickupSlot        String
+  deliveryDate      String?
+  deliverySlot      String?
+  speed             String            @default("standard") // standard | express
+  itemsSummary      String?
+  subtotal          Decimal
+  deliveryFee       Decimal           @default(0.0)
+  discount          Decimal           @default(0.0)
+  expressFee        Decimal           @default(0.0)
+  totalAmount       Decimal
+  paymentMethod     String            @default("Razorpay")
+  paymentStatus     String            @default("PENDING") // PENDING | PAID | FAILED
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  deliveryPartnerId String?
+  deliveryPartner   DeliveryPartner?  @relation(fields: [deliveryPartnerId], references: [id])
+  items             OrderItem[]
+  specialNotes      String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model OrderItem {
+  id            String        @id @default(uuid())
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  catalogItemId String
+  catalogItem   CatalogItem   @relation(fields: [catalogItemId], references: [id])
+  quantity      Int           @default(1)
+  unitPrice     Decimal
+  totalPrice    Decimal
+}
+
+model Coupon {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  title         String
+  description   String
+  discountType  String    // percentage | flat | free_delivery
+  discountValue Decimal
+  maxDiscount   Decimal?
+  minOrder      Decimal   @default(0.0)
+  isActive      Boolean   @default(true)
+  validUntil    DateTime?
+}
+
+model DeliveryPartner {
+  id            String    @id @default(uuid())
+  name          String
+  phone         String    @unique
+  rating        Decimal   @default(5.0)
+  vehicleNumber String
+  city          String    @default("Lucknow")
+  isAvailable   Boolean   @default(true)
+  orders        Order[]
+}
